@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .venv*/
 __pycache__/
 *.pyc
@@ -8,3 +9,6 @@ build/
 *.bin
 *.hex
 
+=======
+node_modules
+>>>>>>> 10808dbd0b4f0d635f573c31ba7984b751d64ff8
