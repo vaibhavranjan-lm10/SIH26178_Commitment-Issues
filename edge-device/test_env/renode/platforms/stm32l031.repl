@@ -1,0 +1,51 @@
+// PRAHARI test env — L1 pod MCU platform: STM32L031 (STM32L031K6)
+// =================================================================
+// The exact SoC of `nucleo_l031k6`, the board Code A uses for smoke builds
+// and as the reference for the eventual custom pod board (blueprint §4.2).
+//
+// NOTE ON USE: per code_a_pod_firmware/README.md the complete §4.3 pipeline
+// image OVERFLOWS this part (32 KB flash) once the soft-float derivations +
+// libm are linked; Mode R additionally exhausts the 8 KB RAM. Use this
+// description for driver-layer / boot / link-layer bring-up of the real
+// firmware in Renode. For the full pipeline image, use stm32l053.repl
+// (what Code A builds on today) or stm32l051.repl (the real target).
+//
+// BASE: layers onto ./stm32l071.repl (verbatim Renode 1.17.0
+// platforms/cpus/stm32l071.repl). STM32L0x1 = one reference manual
+// (RM0377), so the L071 peripheral base addresses are already RM0377
+// addresses and are correct for the L031 unchanged. Only memory sizes and
+// NVIC priority width differ.
+//
+// -------- HAND-ADAPTED (verified against RM0377 Rev 10, ST DS10688
+//          "STM32L031x4 STM32L031x6", and Zephyr dts/arm/st/l0/
+//          stm32l031*.dtsi + stm32l0.dtsi) ------------------------------
+//   flash.size  0x30000 -> 0x8000    32 KB   (STM32L031x6)
+//   sram.size   0x5000  -> 0x2000    8 KB
+//   eeprom.size 0x1800  -> 0x400     1 KB    data EEPROM @ 0x08080000
+//                                            (Category 2 part; DS10688 Table 2)
+//   nvic.priorityMask 0xF0 -> 0xC0   Cortex-M0+ / STM32L0 = 2 priority bits
+//
+// -------- MODELED SUPERSET (in the base description, NOT on a real L031 —
+//          harmless, Code A's L031 overlay never addresses them) --------
+//   gpioPortE @ 0x50001000; usart1 @ 0x40013800; usart4/5 @ 0x40004C00/5000;
+//   i2c2 @ 0x40005800; i2c3 @ 0x40007800; spi2 @ 0x40003800;
+//   timer3 @ 0x40000400; timer7 @ 0x40001400.
+//   (nucleo_l031k6.overlay uses usart2 for RS-485, lpuart1 for the
+//   particulate sensor, spi1 for the SX1262, i2c1, adc1 — all of which ARE
+//   real on the L031 and are inherited at their RM0377 addresses.)
+//
+// SPDX-License-Identifier: Apache-2.0
+
+using "stm32l071.repl"
+
+nvic:
+    priorityMask: 0xC0
+
+flash:
+    size: 0x8000
+
+sram:
+    size: 0x2000
+
+eeprom:
+    size: 0x400

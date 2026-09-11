@@ -1,0 +1,54 @@
+# ============================================================================
+#  DEVELOPMENT / TEST-HARNESS configuration.  NOT a production configuration.
+#  The uplink endpoint points at Code C — the cloud/gateway MIMIC that lives
+#  in test_env/ and is never deployed.  The RPC link is a TCP socket exposed
+#  by the harness's MCU-side emulation.  Do not ship this file.
+# ============================================================================
+
+[node]
+node_id = "dev-node-A"
+site_name = "harness village"
+rpc_device = "tcp://127.0.0.1:7770"   # harness: Code B MCU side (native_sim / Renode) bridged over TCP
+db_path = "/tmp/prahari-dev/ring.sqlite"
+models_root = "../training_pipeline/artifacts"   # dev: the training pipeline's output directory
+model_version = "v0.1.0-synthetic"               # trained on the SYNTHETIC placeholder corpus
+prefer_int8 = true
+ort_threads = 4
+baseline_cadence_s = 3600
+elevated_cadence_s = 300
+retention_days = 60
+
+[uplink]
+endpoint = "http://127.0.0.1:8883/v1"  # Code C mimic (test_env/, later phase) — TEST HARNESS ONLY
+transport = "http"
+timeout_s = 3
+context_poll = true
+
+[static]
+P70 = 420.0
+P71 = 40.0
+P72 = 35.0
+P73 = 25.0
+P74 = 1.35
+P75 = 40
+P77_lat = 23.5
+P77_lon = 85.2
+S30 = 5.0
+S33 = 120.0
+x_m = 0.0
+y_m = 0.0
+
+[[pods]]
+addr = 1
+position = "S1"
+[[pods]]
+addr = 4
+position = "G"
+[[pods]]
+addr = 5
+position = "U"
+
+[[neighbours]]
+node_id = "dev-node-B"
+x_m = 4000.0
+y_m = 0.0

@@ -1,0 +1,14 @@
+# Class C (blueprint §3.1): analogue transducer into the MCU ADC.
+# One io-channel per parameter, same order as prahari,params.
+
+description: PRAHARI class C transducer (analogue into ADC)
+
+compatible: "prahari,adc-transducer"
+
+include: prahari,transducer-base.yaml
+
+properties:
+  io-channels:
+    type: phandle-array
+    required: true
+    description: ADC channel per reported parameter.

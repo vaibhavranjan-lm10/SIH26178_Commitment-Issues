@@ -1,0 +1,201 @@
+# PRAHARI Code A — pod firmware configuration.
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "PRAHARI pod firmware (Code A)"
+
+choice PRAHARI_POD_POSITION_DEFAULT
+	prompt "Default pod position"
+	default PRAHARI_POD_POSITION_DEFAULT_S1
+	help
+	  Compile-time position used when no valid position block is found in
+	  EEPROM (or EEPROM lookup is disabled).  Blueprint §4.1: six positions,
+	  one design.  The transducer set for each position comes from the
+	  devicetree 'prahari,positions' property of every transducer node.
+
+config PRAHARI_POD_POSITION_DEFAULT_S1
+	bool "S1  (-10 cm, potted)"
+config PRAHARI_POD_POSITION_DEFAULT_S2
+	bool "S2  (-40 cm, potted)"
+config PRAHARI_POD_POSITION_DEFAULT_S3
+	bool "S3  (-100 cm, potted)"
+config PRAHARI_POD_POSITION_DEFAULT_G
+	bool "G   (ground, 0 m)"
+config PRAHARI_POD_POSITION_DEFAULT_U
+	bool "U   (understory, ~2 m)"
+config PRAHARI_POD_POSITION_DEFAULT_C
+	bool "C   (canopy / mast top, ~10 m)"
+endchoice
+
+config PRAHARI_POD_POSITION_FROM_EEPROM
+	bool "Read pod position from the EEPROM config block at boot"
+	default y
+	depends on EEPROM
+	help
+	  Boot-time selection: a 5-byte block at EEPROM offset 0
+	  ('P','D', version, position, CRC-8).  Falls back to the Kconfig
+	  default when the block is blank or fails validation.
+
+config PRAHARI_SAMPLE_PERIOD_S
+	int "Acquisition cadence for per-read transducers (seconds)"
+	range 1 3600
+	default 60
+	help
+	  Blueprint §4.3 "sample at configured cadence".  Transducers on a
+	  'periodic' load switch (e.g. the particulate fan) are read on their
+	  own duty cycle from §3.4 instead.
+
+config PRAHARI_RAIL_BUDGET_MA
+	int "Switched 3.3 V rail budget (mA), 0 = unenforced"
+	default 0
+	help
+	  Upper bound on the summed active current of all load switches that
+	  are on at once.  Not specified in the blueprint; set it from the pod
+	  board's 12 V -> 3.3 V buck rating once that is chosen.  A request
+	  that would exceed the budget is refused (-EBUSY); periodic windows
+	  are deferred to the next tick.
+
+config PRAHARI_MOX_ARMED_AT_BOOT
+	bool "Arm MOX gas heater(s) at boot"
+	default n
+	help
+	  Blueprint §3.4: the MOX heater is "on only when armed".  Arming is
+	  meant to come from the head node; this only sets the boot state.
+
+config PRAHARI_MAX_CHANNELS
+	int "Maximum in-situ channels one pod processes"
+	range 4 32
+	default 12
+	help
+	  Sizes the median-of-5 and z-score windows (RAM).  A pod position
+	  with more parameters than this fails pipeline init.
+
+config PRAHARI_ZGATE_WINDOW
+	int "Anomaly-gate rolling window (samples)"
+	range 4 32
+	default 12
+	help
+	  Blueprint §4.3: z-score against a rolling mean.  At the default
+	  60 s cadence this is 12 minutes — the only history the pod keeps.
+
+config PRAHARI_ZGATE_THRESHOLD_CENTI
+	int "Anomaly-gate |z| threshold, hundredths"
+	default 300
+
+config PRAHARI_ZGATE_STD_FLOOR_PERMILLE
+	int "Anomaly-gate std floor as permille of |mean|"
+	default 10
+	help
+	  Keeps a flat signal from making every LSB of noise a 'z = inf'
+	  anomaly.  Absolute floor is 1 milli-unit.
+
+config PRAHARI_EEPROM_CALIB_OFFSET
+	int "EEPROM offset of the calibration table"
+	default 16
+	help
+	  Blueprint §4.3: two-point coefficients in EEPROM.  Table format in
+	  include/prahari/calib.h; up to 16 entries (277 bytes).
+
+choice PRAHARI_LINK_MODE
+	prompt "Head-node link (blueprint §4.4)"
+	default PRAHARI_LINK_MODE_W
+	help
+	  A pod is wired OR radio, set by whether it can power itself (§4.4).
+	  Exactly one link stack is built into the image.
+
+config PRAHARI_LINK_MODE_W
+	bool "Mode W — wired: RS-485 half-duplex multi-drop, polled slave"
+	select UART_INTERRUPT_DRIVEN
+	help
+	  Head node is bus master (§5.2 sweep).  Needs an enabled /rs485
+	  node (prahari,rs485) in the board overlay.
+
+config PRAHARI_LINK_MODE_R
+	bool "Mode R — radio: LoRa SX1262, scheduled slot"
+	select SPI
+	select LORA
+	help
+	  Reports in a TDMA slot after the head node's beacon.  Needs an
+	  enabled semtech,sx1262 node named by 'chosen prahari,lora'.
+endchoice
+
+config PRAHARI_LINK_ADDR
+	int "Default RS-485 address / pod identity (1..247)"
+	range 1 247
+	default 1
+	help
+	  Overridden by the EEPROM link block ('L','K') when present.
+
+config PRAHARI_LINK_SLOT
+	int "Default TDMA slot (Mode R)"
+	range 0 255
+	default 0
+
+config PRAHARI_RS485_IDLE_GAP_MS
+	int "RS-485 inter-frame idle gap that resets the parser (ms)"
+	default 20
+	depends on PRAHARI_LINK_MODE_W
+
+if PRAHARI_LINK_MODE_R
+
+config PRAHARI_LORA_FREQ_HZ
+	int "LoRa centre frequency (Hz)"
+	default 866000000
+	help
+	  §6.2 / §7.3: 865-867 MHz ISM, licence-free in India.
+
+config PRAHARI_LORA_SF
+	int "LoRa spreading factor"
+	range 7 10
+	default 9
+	help
+	  §7.3: SF7-SF10, 125 kHz.  Fixed per pod; adaptive SF is the head node's call.
+
+config PRAHARI_LORA_TX_DBM
+	int "LoRa TX power (dBm)"
+	default 14
+
+config PRAHARI_SLOT_SUPERFRAME_MS
+	int "TDMA superframe (ms)"
+	default 60000
+	help
+	  One round per acquisition cadence.
+
+config PRAHARI_SLOT_MS
+	int "Slot length (ms)"
+	default 2000
+	help
+	  A full pod report (~110 B) at SF10/125 kHz is ~0.8 s on air.
+
+config PRAHARI_SLOT_N
+	int "Number of pod slots per superframe"
+	default 8
+
+config PRAHARI_SLOT_BEACON_MS
+	int "Beacon airtime reserved at superframe start (ms)"
+	default 500
+
+config PRAHARI_SLOT_GUARD_MS
+	int "Guard time around slot edges (ms)"
+	default 50
+
+config PRAHARI_SLOT_HOLDOVER_MS
+	int "Time without a beacon before the pod counts as unsynced (ms)"
+	default 3600000
+	help
+	  The pod keeps its free-running schedule regardless; this only
+	  changes what it reports about itself.
+
+endif # PRAHARI_LINK_MODE_R
+
+config PRAHARI_FRAME_PRINT
+	bool "Print each completed frame on the console"
+	default y
+	depends on PRINTK
+
+# The SX1262 is driven by Zephyr's native backend (no loramac-node /
+# lora-basics-modem module in this workspace).  The legacy module-backed
+# driver symbol defaults on whenever the DT node exists; keep it off.
+configdefault LORA_SX126X
+	default n
+
+source "Kconfig.zephyr"

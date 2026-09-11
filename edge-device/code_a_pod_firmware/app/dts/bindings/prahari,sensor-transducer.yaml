@@ -1,0 +1,32 @@
+# Class A (I2C) or class B (UART) digital transducer exposed through a
+# Zephyr sensor driver.  The physical part is whatever the 'sensor'
+# phandle points at; this node only maps sensor channels to PRAHARI
+# parameter IDs for one pod position.
+
+description: PRAHARI class A/B transducer behind a Zephyr sensor driver
+
+compatible: "prahari,sensor-transducer"
+
+include: prahari,transducer-base.yaml
+
+properties:
+  sensor:
+    type: phandle
+    required: true
+    description: The Zephyr sensor device (I2C or UART child node).
+
+  sensor-channels:
+    type: string-array
+    required: true
+    description: |
+      Zephyr sensor channel per parameter, same order as prahari,params,
+      as the SENSOR_CHAN_ suffix in lower-case with dashes, e.g.
+      "ambient-temp", "humidity", "press", "accel-x", "pm-2-5".
+
+  class:
+    type: string
+    required: true
+    enum:
+      - "i2c"   # blueprint class A
+      - "uart"  # blueprint class B
+    description: Blueprint §3.1 interface class of the physical link.

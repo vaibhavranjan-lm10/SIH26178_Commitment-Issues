@@ -1,0 +1,10 @@
+.venv*/
+__pycache__/
+*.pyc
+build/
+.pytest_cache/
+*.onnx
+*.uf2
+*.bin
+*.hex
+

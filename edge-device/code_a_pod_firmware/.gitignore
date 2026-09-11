@@ -1,0 +1,7 @@
+# West workspace checkouts — fetched by `west update`, never committed.
+/zephyr/
+/modules/
+/.west/
+# Build output
+/build/
+/app/build/

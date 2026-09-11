@@ -1,0 +1,348 @@
+/*
+ * SIZE STAND-IN ONLY: same population as nucleo_l031k6 on the Nucleo-64
+ * L053R8 (64 KB flash, same L0 family) to measure the image on a 64 KB part
+ * until the L051 decision and its custom board definition exist.  Not a
+ * target.  Enough pins here for both link modes without disabling anything.
+ *
+ * ONE image, all six positions: every transducer that any position can
+ * carry is declared here; the firmware enables only those whose
+ * "prahari,positions" includes the pod's resolved position.
+ *
+ * Reference parts (NOT a BOM decision — swap the sensor node, keep the
+ * transducer node): SHT4x air T/RH, LPS22HB pressure, LIS2DH accel/tilt,
+ * PMS7003 particulate.  Analogue inputs are generic.
+ *
+ * Pin plan (Nucleo-32): USART2 on PA9/PA10 carries the RS-485 transceiver
+ * (Mode W) — and the console in this dev build, which on real hardware
+ * must be off (-DCONFIG_UART_CONSOLE=n) so printk never hits the bus.
+ * LPUART1 PA2/PA3 = particulate sensor.  I2C1 PB6/PB7.  RS-485 DE PC14.
+ *
+ * Mode R on this 32-pin package needs SPI1 PA5/6/7 + PA12/PB0/PB1, which
+ * the ADC population uses: boards/nucleo_l031k6_mode_r.overlay
+ * (EXTRA_DTC_OVERLAY_FILE) enables the radio and disables those
+ * transducers.  The real L051 pod board is pinned out for its population.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	chosen {
+		prahari,lora = &sx1262;
+	};
+
+	/* Mode W transceiver: DE/RE on PC14 (LSE pin, unused as oscillator). */
+	rs485: rs485 {
+		compatible = "prahari,rs485";
+		uart = <&usart1>;
+		de-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
+	};
+
+	/* Blueprint §3.4 switched rails.  Child index = power-domain number. */
+	load_switches: load-switches {
+		ls_class_a: sensor-rail {
+			/* Air T/RH, pressure, IMU: <1 mA.  §3.4 says "continuous is
+			 * acceptable" but the rule is nothing energised between reads,
+			 * so per-read here; change policy to "hold" to keep it up. */
+			compatible = "prahari,load-switch";
+			gpios = <&gpioa 15 GPIO_ACTIVE_HIGH>;
+			policy = "per-read";
+			current-ma = <1>;
+			settle-ms = <20>;
+			on-ms = <5000>;
+		};
+		ls_soil: soil-excitation {
+			/* §3.4: ~10 mA, 200 ms per read */
+			compatible = "prahari,load-switch";
+			gpios = <&gpiob 4 GPIO_ACTIVE_HIGH>;
+			policy = "per-read";
+			current-ma = <10>;
+			settle-ms = <100>;
+			on-ms = <200>;
+		};
+		ls_pm: particulate-fan {
+			/* §3.4: ~80 mA, 30 s every 15 min.  Read at 25 s, off at 30 s. */
+			compatible = "prahari,load-switch";
+			gpios = <&gpiob 3 GPIO_ACTIVE_HIGH>;   /* Nucleo LD3: fan window visible */
+			policy = "periodic";
+			current-ma = <80>;
+			settle-ms = <25000>;
+			on-ms = <30000>;
+			period-ms = <900000>;
+		};
+		ls_mox: mox-heater {
+			/* §3.4: ~40 mA, on only when armed.  Warm-up not specified in
+			 * the blueprint: 30 s is a placeholder for the chosen element. */
+			compatible = "prahari,load-switch";
+			gpios = <&gpiob 5 GPIO_ACTIVE_HIGH>;
+			policy = "armed";
+			current-ma = <40>;
+			settle-ms = <30000>;
+		};
+		ls_analog: analogue-aux {
+			/* Pore-pressure, wind vane, pyranometer front-ends.  Draw not in
+			 * §3.4 table (0 = unbudgeted until the parts are chosen). */
+			compatible = "prahari,load-switch";
+			gpios = <&gpioc 15 GPIO_ACTIVE_HIGH>;
+			policy = "per-read";
+			current-ma = <0>;
+			settle-ms = <50>;
+			on-ms = <500>;
+		};
+	};
+
+	/* Parameter IDs: docs/reference/prahari_parameters.md (P-numbers). */
+	transducers: transducers {
+		/* ---- class C: analogue into ADC ---- */
+		soil_10cm {
+			/* Capacitive probe lead 1 -> P1.  P4/P7 (temp, EC) need extra
+			 * analogue lines or a digital probe: add io-channels + params. */
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 0>;
+			prahari,params = <1>;
+			prahari,positions = "S1";
+			power-domain = <&ls_soil>;
+			prahari,range-lo = <0>;
+			prahari,range-hi = <1000>;
+		};
+		soil_40cm {
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 1>;
+			prahari,params = <2>;
+			prahari,positions = "S2";
+			power-domain = <&ls_soil>;
+			prahari,range-lo = <0>;
+			prahari,range-hi = <1000>;
+		};
+		soil_100cm {
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 4>;
+			prahari,params = <3>;
+			prahari,positions = "S3";
+			power-domain = <&ls_soil>;
+			prahari,range-lo = <0>;
+			prahari,range-hi = <1000>;
+		};
+		surface_soil {
+			/* §11.4 G: surface soil moisture 0-5 cm -> P10 */
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 5>;
+			prahari,params = <10>;
+			prahari,positions = "G";
+			power-domain = <&ls_soil>;
+			prahari,range-lo = <0>;
+			prahari,range-hi = <1000>;
+		};
+		pore_pressure {
+			/* Requested at G; blueprint §11.4 lists it on the R3 slope pod. */
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 6>;
+			prahari,params = <45>;
+			prahari,positions = "G";
+			power-domain = <&ls_analog>;
+		};
+		mox_gas {
+			/* Analogue MOX element (blueprint class C variant) -> P31 TVOC
+			 * index after calibration.  Heater on the armed rail. */
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 7>;
+			prahari,params = <31>;
+			prahari,positions = "U";
+			power-domain = <&ls_mox>;
+		};
+		pyranometer {
+			/* Global solar irradiance -> P20 (canopy, needs open sky) */
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 8>;
+			prahari,params = <20>;
+			prahari,positions = "C";
+			power-domain = <&ls_analog>;
+		};
+		wind_vane {
+			/* CONFLICT FLAGGED: blueprint §3.1 lists the wind vane under class
+			 * D (pulse); a potentiometer vane is analogue.  Modelled as class C
+			 * here; change compatible to prahari,pulse-transducer if the chosen
+			 * vane is an encoder.  Bearing -> sin/cos happens downstream. */
+			compatible = "prahari,adc-transducer";
+			io-channels = <&adc1 9>;
+			prahari,params = <19>;
+			prahari,positions = "U", "C";
+			power-domain = <&ls_analog>;
+		};
+
+		/* ---- class D: pulse / interrupt ---- */
+		rain_gauge {
+			/* Tipping bucket -> P12 accumulation (tips; mm at calibration).
+			 * No power-domain on purpose: §3.4 passive, never switched. */
+			compatible = "prahari,pulse-transducer";
+			gpios = <&gpioa 8 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			mode = "count";
+			debounce-ms = <10>;
+			prahari,params = <12>;
+			prahari,positions = "G";
+		};
+		anemometer {
+			/* Cup anemometer reed switch -> P18 (pulses per cycle; m/s at cal) */
+			compatible = "prahari,pulse-transducer";
+			gpios = <&gpioa 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			mode = "rate";
+			debounce-ms = <2>;
+			prahari,params = <18>;
+			prahari,positions = "U", "C";
+			power-domain = <&ls_class_a>;
+		};
+
+		/* ---- class A: I2C sensors (each pod terminates its own bus) ---- */
+		air_trh_understory {
+			/* Same physical part as air_trh_canopy; which node is active
+			 * depends on position, so P13/P15 vs P14/P16 is a config fact. */
+			compatible = "prahari,sensor-transducer";
+			class = "i2c";
+			sensor = <&sht4x>;
+			sensor-channels = "ambient-temp", "humidity";
+			prahari,params = <13 15>;
+			prahari,positions = "U";
+			power-domain = <&ls_class_a>;
+			prahari,range-lo = <(-40000) 0>;
+			prahari,range-hi = <60000 100000>;
+		};
+		air_trh_canopy {
+			compatible = "prahari,sensor-transducer";
+			class = "i2c";
+			sensor = <&sht4x>;
+			sensor-channels = "ambient-temp", "humidity";
+			prahari,params = <14 16>;
+			prahari,positions = "C";
+			power-domain = <&ls_class_a>;
+			prahari,range-lo = <(-40000) 0>;
+			prahari,range-hi = <60000 100000>;
+		};
+		barometer {
+			compatible = "prahari,sensor-transducer";
+			class = "i2c";
+			sensor = <&lps22hb>;
+			sensor-channels = "press";
+			prahari,params = <17>;
+			prahari,positions = "U";
+			power-domain = <&ls_class_a>;
+			prahari,range-lo = <300000>;
+			prahari,range-hi = <1100000>;
+		};
+		imu_tilt {
+			/* Bonded to the mast foot: measures the mast, not the air (§3.2) */
+			compatible = "prahari,sensor-transducer";
+			class = "i2c";
+			sensor = <&lis2dh>;
+			sensor-channels = "accel-x", "accel-y", "accel-z";
+			prahari,params = <42 43 44>;
+			prahari,positions = "G";
+			power-domain = <&ls_class_a>;
+			prahari,range-lo = <(-2000000) (-2000000) (-2000000)>;
+			prahari,range-hi = <2000000 2000000 2000000>;
+		};
+
+		/* ---- class B: UART ---- */
+		particulate {
+			compatible = "prahari,sensor-transducer";
+			class = "uart";
+			sensor = <&pms7003>;
+			sensor-channels = "pm-1-0", "pm-2-5", "pm-10";
+			prahari,params = <21 22 23>;
+			prahari,positions = "U";
+			power-domain = <&ls_pm>;
+			prahari,range-lo = <0 0 0>;
+			prahari,range-hi = <1000000 1000000 1000000>;
+		};
+	};
+};
+
+/* Own supply rail (§4.3 self-report) via the internal reference. */
+&vref {
+	status = "okay";
+};
+
+&adc1 {
+	pinctrl-0 = <&adc_in0_pa0 &adc_in1_pa1 &adc_in4_pa4 &adc_in5_pa5
+		     &adc_in6_pa6 &adc_in7_pa7 &adc_in8_pb0 &adc_in9_pb1>;
+	pinctrl-names = "default";
+	st,adc-clock-source = "SYNC";
+	st,adc-prescaler = <4>;
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	channel@0 { reg = <0>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+	channel@1 { reg = <1>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+	channel@4 { reg = <4>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+	channel@5 { reg = <5>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+	channel@6 { reg = <6>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+	channel@7 { reg = <7>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+	channel@8 { reg = <8>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+	channel@9 { reg = <9>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL";
+		    zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>; zephyr,resolution = <12>; };
+};
+
+/* Stand-in pinout: console stays on the board default USART2 PA2/PA3;
+ * RS-485 on USART1 PB6/PB7, DE on PC8. */
+&usart1 {
+	pinctrl-0 = <&usart1_tx_pb6 &usart1_rx_pb7>;
+	pinctrl-names = "default";
+	current-speed = <19200>;
+	status = "okay";
+};
+
+/* SX1262 on SPI2 (PB13/14/15), CS PB12, RESET PC6, BUSY PC7, DIO1 PC9. */
+&spi2 {
+	pinctrl-0 = <&spi2_sck_pb13 &spi2_miso_pb14 &spi2_mosi_pb15>;
+	pinctrl-names = "default";
+	status = "okay";
+	cs-gpios = <&gpiob 12 GPIO_ACTIVE_LOW>;
+
+	sx1262: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		reset-gpios = <&gpioc 6 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
+		dio1-gpios = <&gpioc 9 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&lpuart1 {
+	pinctrl-0 = <&lpuart1_tx_pb10 &lpuart1_rx_pb11>;
+	pinctrl-names = "default";
+	current-speed = <9600>;
+	status = "okay";
+
+	pms7003: pms7003 {
+		compatible = "plantower,pms7003";
+	};
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_scl_pb8 &i2c1_sda_pb9>;
+	pinctrl-names = "default";
+	status = "okay";
+
+	sht4x: sht4x@44 {
+		compatible = "sensirion,sht4x";
+		reg = <0x44>;
+		repeatability = <2>;
+	};
+	lps22hb: lps22hb@5c {
+		compatible = "st,lps22hb-press";
+		reg = <0x5c>;
+	};
+	lis2dh: lis2dh@18 {
+		compatible = "st,lis2dh";
+		reg = <0x18>;
+	};
+};

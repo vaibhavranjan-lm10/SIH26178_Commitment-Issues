@@ -1,0 +1,19 @@
+# Mode W transceiver (blueprint §4.4): the UART the isolated RS-485
+# transceiver sits on and its driver-enable pin.  One node at /rs485.
+
+description: PRAHARI RS-485 half-duplex transceiver
+
+compatible: "prahari,rs485"
+
+include: base.yaml
+
+properties:
+  uart:
+    type: phandle
+    required: true
+    description: UART wired to the transceiver (must be enabled).
+
+  de-gpios:
+    type: phandle-array
+    required: true
+    description: Driver-enable (DE, and /RE tied to it). Active = transmit.

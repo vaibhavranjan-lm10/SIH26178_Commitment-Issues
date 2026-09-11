@@ -1,0 +1,42 @@
+# Common properties of every PRAHARI transducer node.  Included by the
+# per-class bindings; never used as a compatible on its own.
+
+description: PRAHARI transducer (common properties)
+
+include: base.yaml
+
+properties:
+  prahari,params:
+    type: array
+    required: true
+    description: |
+      Parameter IDs this transducer reports, one per channel, in channel
+      order.  Numbers are the 'P' IDs from docs/reference/prahari_parameters.md
+      (PRIMARY in situ, P1..P46).  Never invent one.
+
+  prahari,positions:
+    type: string-array
+    required: true
+    description: |
+      Pod positions (blueprint §4.1) at which this transducer is populated:
+      any of "S1" "S2" "S3" "G" "U" "C".  The firmware enables the node
+      only when the pod's resolved position is listed here.
+
+  power-domain:
+    type: phandle
+    description: |
+      The prahari,load-switch feeding this transducer.  Omit ONLY for a
+      transducer that is passive and unpowered (blueprint §3.4: the
+      tipping rain gauge).
+
+  prahari,range-lo:
+    type: array
+    description: |
+      Optional.  Lower in-spec bound per parameter (milli-units of the
+      parameter unit, after calibration), same order as prahari,params.
+      Both range-lo and range-hi must be given together.  Values outside
+      [lo, hi] are FLAGGED (XDCR_F_RANGE), never discarded (§4.3).
+
+  prahari,range-hi:
+    type: array
+    description: Optional.  Upper in-spec bound per parameter; see prahari,range-lo.

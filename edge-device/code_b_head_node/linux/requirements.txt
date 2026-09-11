@@ -1,0 +1,6 @@
+# Code B — head node, Linux side. Runtime dependencies only (see
+# ../training_pipeline/requirements.txt for the separate, offline pipeline).
+numpy
+onnxruntime
+arduino-router-bridge   # official Arduino package: MessagePack-RPC bridge to the on-board Router
+msgpack                 # pulled in by arduino-router-bridge; pinned here too since tests use it directly

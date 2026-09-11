@@ -1,0 +1,110 @@
+{
+  "kind": "PRAHARI L0 electrical stimulus (Renode) -- NOT application-level data",
+  "position": "G",
+  "scenario": "blueprint section 11 village worked example",
+  "duration_h": 120.0,
+  "dt_s": 30.0,
+  "n_samples": 14401,
+  "rs485_addr": 2,
+  "lora_slot": 0,
+  "electrical_envelope": {
+    "adc_counts_max": 4095,
+    "adc_vref_uv": 3300000,
+    "gpio_levels": [
+      0,
+      1
+    ],
+    "i2c_byte_range": [
+      0,
+      255
+    ],
+    "uart_byte_range": [
+      0,
+      255
+    ]
+  },
+  "channels": {
+    "adc": [
+      {
+        "name": "surface_soil",
+        "adc_channel": 5,
+        "param": 10,
+        "quantity": "vwc_surface",
+        "front_end_volts": [
+          1.0,
+          2.6
+        ],
+        "count_min": 1417,
+        "count_max": 2918
+      },
+      {
+        "name": "pore_pressure",
+        "adc_channel": 6,
+        "param": 45,
+        "quantity": "pore_kpa",
+        "front_end_volts": [
+          0.3,
+          3.05
+        ],
+        "count_min": 575,
+        "count_max": 2149
+      },
+      {
+        "name": "vrefint",
+        "adc_channel": 17,
+        "param": "O1 (rail self-report)",
+        "count_min": 1505,
+        "count_max": 1505,
+        "rail_mv": 3300.0
+      }
+    ],
+    "pulse": [
+      {
+        "name": "rain_gauge",
+        "param": 12,
+        "representation": "edges",
+        "n_pulses": 310,
+        "n_edges": 1241
+      }
+    ],
+    "i2c": [
+      {
+        "name": "lis2dh",
+        "addr": 24,
+        "params": [
+          42,
+          43,
+          44
+        ],
+        "kind": "lis2dh"
+      }
+    ],
+    "uart": []
+  },
+  "unrealised_channels": {
+    "P11_water_level": {
+      "physical": "stage_m",
+      "reason": "no P11 transducer in nucleo_l053r8.overlay"
+    },
+    "P38_turbidity": {
+      "physical": null,
+      "reason": "no P38 transducer in nucleo_l053r8.overlay"
+    }
+  },
+  "calibration": [
+    {
+      "param": 10,
+      "raw_lo": 2422,
+      "ref_lo": 100,
+      "raw_hi": 1178,
+      "ref_hi": 450
+    },
+    {
+      "param": 45,
+      "raw_lo": 442,
+      "ref_lo": 5000,
+      "raw_hi": 2778,
+      "ref_hi": 110000
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+# Class D (blueprint §3.1): pulse / interrupt transducer on a GPIO.
+
+description: PRAHARI class D transducer (pulse / interrupt)
+
+compatible: "prahari,pulse-transducer"
+
+include: prahari,transducer-base.yaml
+
+properties:
+  gpios:
+    type: phandle-array
+    required: true
+    description: Pulse input; use GPIO_ACTIVE_* to select the counted edge.
+
+  mode:
+    type: string
+    required: true
+    enum:
+      - "count"   # cumulative counter (tipping rain gauge -> P12 accumulation)
+      - "rate"    # pulses since the previous read (cup anemometer -> P18)
+    description: What the read returns.  Order must match xdcr_pulse.c.
+
+  debounce-ms:
+    type: int
+    default: 10
+    description: Edges closer than this to the previous accepted edge are ignored.

@@ -1,0 +1,7 @@
+tests:
+  prahari.head_node.mcu.bus_master:
+    platform_allow:
+      - native_sim/native/64
+    tags:
+      - prahari
+      - code_b

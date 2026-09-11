@@ -1,0 +1,35 @@
+// PRAHARI test env — L1 pod MCU platform: STM32L053 (STM32L053R8)
+// =================================================================
+// The SoC on `nucleo_l053r8`. Code A currently BUILDS on this board
+// (app/boards/nucleo_l053r8.overlay) as a 64 KB size stand-in until the
+// L051 custom board definition exists — so THIS description is what the
+// harness loads to run the real, complete pod firmware image today.
+//
+// The L053 is RM0377 Category 3, identical core and memory map to the
+// L051 (64 KB flash / 8 KB RAM / 2 KB data EEPROM). It additionally has a
+// USB 2.0 FS device controller (@ 0x40005C00 / SRAM @ 0x40006000) and a
+// segment-LCD controller (@ 0x40002400). NEITHER is modeled here and
+// NEITHER is used by Code A (nucleo_l053r8.overlay enables no USB/LCD),
+// so this file is just the L051 description under a name that matches the
+// board.
+//
+// HAND-ADAPTED vs the ./stm32l071.repl base: exactly the same three memory
+// sizes + priority width as stm32l051.repl (see that file's header for the
+// full RM0377 verification notes). Re-asserted explicitly below rather than
+// `using "stm32l051.repl"` so this file stands on its own.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+using "stm32l071.repl"
+
+nvic:
+    priorityMask: 0xC0
+
+flash:
+    size: 0x10000
+
+sram:
+    size: 0x2000
+
+eeprom:
+    size: 0x800

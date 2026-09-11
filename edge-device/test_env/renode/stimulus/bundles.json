@@ -1,0 +1,23 @@
+{
+  "S1": {
+    "dir": "test_env/renode/stimulus/pod_S1",
+    "adc": 2,
+    "pulse": 0,
+    "i2c": 0,
+    "uart": 0
+  },
+  "G": {
+    "dir": "test_env/renode/stimulus/pod_G",
+    "adc": 3,
+    "pulse": 1,
+    "i2c": 1,
+    "uart": 0
+  },
+  "U": {
+    "dir": "test_env/renode/stimulus/pod_U",
+    "adc": 3,
+    "pulse": 1,
+    "i2c": 2,
+    "uart": 1
+  }
+}

@@ -1,0 +1,51 @@
+# One switched 3.3 V rail (blueprint §3.4): a load switch under MCU control
+# feeding one or more transducers.  Children of the /load-switches node;
+# the child index is the power-domain number used by the firmware.
+#
+# 'policy' enum order MUST match 'enum pwr_policy' in include/prahari/power.h.
+
+description: PRAHARI transducer load switch (switched 3.3 V rail)
+
+compatible: "prahari,load-switch"
+
+include: base.yaml
+
+properties:
+  gpios:
+    type: phandle-array
+    required: true
+    description: Load-switch enable pin (active level = rail on).
+
+  current-ma:
+    type: int
+    required: true
+    description: |
+      Draw of the transducer(s) on this rail when active, mA
+      (blueprint §3.4 table).  0 = not specified / not budgeted.
+
+  policy:
+    type: string
+    required: true
+    enum:
+      - "per-read"   # on for the duration of a read, then off
+      - "periodic"   # own duty cycle: on for on-ms every period-ms
+      - "armed"      # on only while armed (MOX heater)
+      - "hold"       # stays on once first acquired (only where §3.4 allows)
+    description: Switching policy.
+
+  settle-ms:
+    type: int
+    default: 0
+    description: Time after switch-on before a read is allowed.
+
+  on-ms:
+    type: int
+    default: 0
+    description: |
+      periodic: length of each on-window.  Other policies: hard cap on
+      continuous on-time (0 = no cap); exceeding it forces the rail off.
+
+  period-ms:
+    type: int
+    default: 0
+    description: periodic only; window repeat interval.

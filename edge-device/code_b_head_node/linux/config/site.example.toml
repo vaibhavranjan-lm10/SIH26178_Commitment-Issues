@@ -1,0 +1,56 @@
+# PRAHARI head node — Linux side — PRODUCTION site configuration template.
+# Copy to /etc/prahari/site.toml and fill in.  Nothing in here refers to the
+# test harness; the uplink endpoint below is the real ingest service.
+
+[node]
+node_id = "IN-JH-VILLAGE-0001"        # unique per head node; hashed into the mesh packet header and TDMA slot
+site_name = "Panchayat office mast"
+rpc_device = "/dev/ttyHS1"            # internal MCU<->QRB2210 UART (stand-in for the Arduino bridge)
+rpc_baud = 115200
+db_path = "/var/lib/prahari/ring.sqlite"
+models_root = "/var/lib/prahari/models"
+model_version = "current"             # models_root/CURRENT names the active version (OTA: write a new CURRENT)
+prefer_int8 = true                    # §6.7 INT8
+ort_threads = 4                       # §6.7
+baseline_cadence_s = 3600             # §6.4 hourly
+elevated_cadence_s = 300              # §6.4 5-minutely while any head is at warning
+elevated_cooldown_cycles = 12
+retention_days = 60                   # 21 d context + 30 d antecedent history + cascade spin-up
+
+[uplink]
+endpoint = ""                         # REQUIRED: e.g. "https://ingest.prahari.example.in/v1"  (MeghRaj / AWS Mumbai, §8.2)
+transport = "http"                    # "http" | "none"
+timeout_s = 10
+context_poll = true                   # satellite/reanalysis context vector (§6.3) arrives over this link
+
+# Static site block (P70–P82 as installed; S30–S34 from the DEM at install).  IDs per prahari_parameters.md.
+[static]
+P70 = 412.0                           # elevation, m
+P71 = 45.0                            # sand %
+P72 = 30.0                            # silt %
+P73 = 25.0                            # clay %
+P74 = 1.35                            # bulk density g/cm³
+P75 = 40                              # land cover class code
+P77_lat = 23.35
+P77_lon = 85.33
+S30 = 6.5                             # slope, deg
+S33 = 180.0                           # specific catchment area, m²/m
+x_m = 0.0                             # local metric coordinates used for the mesh adjacency prior
+y_m = 0.0
+
+# Pods on the RS-485 bus (Mode W) — address and position (§4.1).  Mode R pods report on their own slot.
+[[pods]]
+addr = 1
+position = "S1"
+[[pods]]
+addr = 4
+position = "G"
+[[pods]]
+addr = 5
+position = "U"
+
+# Mesh neighbours whose positions are known (adjacency prior, §7.4); unknown neighbours still work.
+[[neighbours]]
+node_id = "IN-JH-VILLAGE-0002"
+x_m = 3800.0
+y_m = -600.0

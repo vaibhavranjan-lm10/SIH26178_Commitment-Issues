@@ -1,0 +1,7 @@
+tests:
+  prahari.pod.xdcr_select:
+    platform_allow:
+      - native_sim/native/64
+    tags:
+      - prahari
+      - code_a

@@ -1,0 +1,115 @@
+:name: PRAHARI village column (blueprint §11.4) — L1 pods + L3 head-node MCU
+:description: Three wired pods (S1/G/U) on an RS-485 Mode W multi-drop bus with
+:             the head-node MCU, real compiled firmware on every machine, fed
+:             the L0 electrical stimulus from test_env/l0_stimulus/, with the
+:             head-node bridge UART exposed as a raw TCP socket for Code B's
+:             Linux side.
+:
+: WHAT IS REAL HERE
+:   - Every machine loads the ACTUAL compiled firmware ELF — no stand-in:
+:       pods       -> code_a_pod_firmware/build/pod_l053_w/zephyr/zephyr.elf
+:                     (Code A, Mode W / RS-485, one image, position per EEPROM)
+:       head node  -> code_a_pod_firmware/build/hn_mcu/zephyr/zephyr.elf
+:                     (Code B MCU side, arduino_uno_q / STM32U585)
+:     Missing either ELF aborts the script (check below). Build them with:
+:       cd code_a_pod_firmware
+:       west build -p always -b nucleo_l053r8 -d build/pod_l053_w app -- -DCONFIG_PRAHARI_LINK_MODE_W=y
+:       west build -p always -b arduino_uno_q -d build/hn_mcu ../code_b_head_node/mcu
+:   - Platforms are the hand-verified descriptions in plat­forms/ (RM0377 / RM0456 + this repo's Zephyr dtsi;
+:     (platforms/stm32l053.repl, platforms/stm32u585.repl) — Renode 1.17
+:     bundles no STM32L053 / STM32U585 platform; the addresses in these were
+:     cross-checked against RM0377 / RM0456 and this repo's Zephyr dtsi
+:     (platforms/README.md has the correct-vs-substitute breakdown).
+:   - RS-485 Mode W (§4.4): all four USART1s join one UARTHub = an
+:     electrically shared multi-drop bus; the head node is master and polls
+:     pods 1/2/3 by address.
+:   - Stimulus from test_env/l0_stimulus/ (run
+:     `python -m test_env.l0_stimulus.generate --out test_env/renode/stimulus`
+:     first). Each pod's eeprom.bin carries its position + RS-485 address +
+:     the calibration table matched to the ADC transfer functions.
+:   - The head-node bridge UART (LPUART1, `prahari,rpc-uart`) is a raw TCP
+:     socket on port 3390 (emitConfig=false => no telnet negotiation),
+:     carrying the exact MessagePack-RPC frames bridge_contract.c emits.
+:     Code B's Linux side connects with test_env/renode/linux_bridge_probe.py.
+:
+: KNOWN LIMITATION (test_env/renode/README.md has the detail)
+:   The firmware loads and boots — pods resolve their position from EEPROM,
+:   load the calibration table, initialise the RS-485 link; the head-node
+:   MCU boots — but the Zephyr kernel tick does not advance under Renode
+:   1.17's available STM32L0 / generated platforms (SysTick counts, its
+:   exception is not delivered), so Code A does not reach its first
+:   acquisition cycle and produces no processed value to cross the bridge.
+
+$repo ?= @.
+$pod_elf = @/home/saurabh/prahari/code_a_pod_firmware/build/zephyr/zephyr.elf
+$hn_elf  ?= $repo/code_a_pod_firmware/build/hn_mcu/zephyr/zephyr.elf
+$pod_plat ?= $repo/test_env/renode/platforms/stm32l053.repl
+$hn_plat  ?= $repo/test_env/renode/platforms/stm32u585.repl
+$stim ?= $repo/test_env/renode/stimulus
+$bridge_port ?= 3390
+
+python "import os"
+python "assert os.path.isfile(r'$pod_elf = @/home/saurabh/prahari/code_a_pod_firmware/build/zephyr/zephyr.elf
+python "assert os.path.isfile(r'$hn_elf'),  'MISSING head-node MCU firmware: ' + r'$hn_elf' + ' — build code_b_head_node/mcu (see header)'"
+python "assert os.path.isdir(r'$stim/pod_G'), 'MISSING stimulus bundle: run  python -m test_env.l0_stimulus.generate --out ' + r'$stim'"
+
+# ---------------------------------------------------------------- head node (Code B MCU)
+mach create "hn"
+machine LoadPlatformDescription @$hn_plat
+sysbus LoadELF @$hn_elf
+showAnalyzer usart3
+
+# ---------------------------------------------------------------- pods (Code A, one image)
+mach create "pod_s1"
+machine LoadPlatformDescription @$pod_plat
+sysbus LoadELF @$pod_elf = @/home/saurabh/prahari/code_a_pod_firmware/build/zephyr/zephyr.elf
+sysbus LoadBinary @$stim/pod_S1/eeprom.bin 0x08080000
+showAnalyzer usart2
+
+mach create "pod_g"
+machine LoadPlatformDescription @$pod_plat
+sysbus LoadELF @$pod_elf = @/home/saurabh/prahari/code_a_pod_firmware/build/zephyr/zephyr.elf
+sysbus LoadBinary @$stim/pod_G/eeprom.bin 0x08080000
+showAnalyzer usart2
+
+mach create "pod_u"
+machine LoadPlatformDescription @$pod_plat
+sysbus LoadELF @$pod_elf = @/home/saurabh/prahari/code_a_pod_firmware/build/zephyr/zephyr.elf
+sysbus LoadBinary @$stim/pod_U/eeprom.bin 0x08080000
+showAnalyzer usart2
+
+# ---------------------------------------------------------------- RS-485 Mode W bus (§4.4)
+emulation CreateUARTHub "rs485bus"
+mach set "hn";     connector Connect sysbus.usart1 rs485bus; showAnalyzer sysbus.usart1
+mach set "pod_s1"; connector Connect sysbus.usart1 rs485bus; showAnalyzer sysbus.usart1
+mach set "pod_g";  connector Connect sysbus.usart1 rs485bus; showAnalyzer sysbus.usart1
+mach set "pod_u";  connector Connect sysbus.usart1 rs485bus; showAnalyzer sysbus.usart1
+
+# ---------------------------------------------------------------- MCU<->Linux bridge socket
+emulation CreateServerSocketTerminal $bridge_port "bridge" false
+mach set "hn"
+connector Connect sysbus.lpuart1 bridge
+
+# ---------------------------------------------------------------- L0 electrical stimulus
+# ADC raw 12-bit counts (STM32_ADC.FeedSample value channel repeat). Counts are
+# the dry / wet ends of the pod trajectories from test_env/l0_stimulus/
+# (adc/<name>.count.csv); repeat holds each until the emulation is re-fed.
+mach set "pod_g"
+sysbus.adc1 FeedSample 2918 5 4    # surface_soil P10 dry (theta 0.12)
+sysbus.adc1 FeedSample 1700 5 100000   # surface_soil P10 wetting toward saturation
+sysbus.adc1 FeedSample 1730 6 100000   # pore_pressure P45 rising
+sysbus.adc1 FeedSample 1505 17 100000  # VREFINT: healthy 3.3 V rail self-report
+sysbus.gpioPortA OnGPIO 8 true          # rain-gauge line idle-high (active-low tip = pull low)
+
+mach set "pod_s1"
+sysbus.adc1 FeedSample 1620 0 100000    # soil_10cm P1 near saturation
+sysbus.adc1 FeedSample 1505 17 100000
+
+mach set "pod_u"
+sysbus.adc1 FeedSample 900 7 100000     # mox_gas P31
+sysbus.adc1 FeedSample 2500 9 100000    # wind_vane P19
+sysbus.adc1 FeedSample 1505 17 100000
+
+mach set ""
+echo ""
+echo "=== village_column ready: hn + pod_s1 + pod_g + pod_u on RS-485 hub 'rs485bus'; bridge socket tcp:$bridge_port ==="

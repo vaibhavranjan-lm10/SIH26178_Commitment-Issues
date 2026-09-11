@@ -1,0 +1,7 @@
+tests:
+  prahari.pod.pipeline:
+    platform_allow:
+      - native_sim/native/64
+    tags:
+      - prahari
+      - code_a

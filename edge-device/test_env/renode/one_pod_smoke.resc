@@ -1,0 +1,15 @@
+mach create "pod_g"
+machine LoadPlatformDescription @/home/saurabh/prahari/test_env/renode/platforms/stm32l053.repl
+sysbus LoadELF @/home/saurabh/prahari/code_a_pod_firmware/build/pod_l053_w/zephyr/zephyr.elf
+sysbus LoadBinary @/home/saurabh/prahari/test_env/renode/stimulus/pod_G/eeprom.bin 0x08080000
+showAnalyzer usart2
+sysbus.adc1 FeedSample 1700 5 99999
+sysbus.adc1 FeedSample 1730 6 99999
+sysbus.adc1 FeedSample 1505 17 99999
+emulation RunFor "8"
+pause
+echo "== pod_g cpu =="
+cpu PC
+cpu ExecutedInstructions
+cpu IsHalted
+quit

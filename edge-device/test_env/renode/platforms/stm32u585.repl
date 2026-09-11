@@ -1,0 +1,414 @@
+// PRAHARI test env — L3 head node, MCU-side platform: STM32U585
+// =============================================================================
+// Code B's MCU side (blueprint §6.1) runs on the STM32U585 half of the Arduino
+// UNO Q. Zephyr board: arduino_uno_q, SoC stm32u585xx, Cortex-M33 @ 160 MHz,
+// 2 MB flash, 768 KB SRAM. Code B builds against Zephyr's own
+// dts/arm/st/u5/stm32u5.dtsi + stm32u585Xi.dtsi — every address below was
+// taken from that devicetree (which ST maintains and which the firmware is
+// literally compiled against) and cross-checked against RM0456.
+//
+// Renode 1.17.0 ships NO STM32U5 platform and NO STM32U5-specific peripheral
+// models. This description is therefore hand-built from the two closest
+// SHIPPED Cortex-M33 STM32 descriptions:
+//   * platforms/cpus/stm32l552.repl  — classic APB1/APB2 peripheral set
+//     (timers, USARTs, SPI, GPIO, ADC) sit at the same addresses on L5 and U5.
+//   * platforms/cpus/stm32wba52.repl — the STM32WBA is the same silicon
+//     generation as U5 for the system-control block: RCC, PWR and the flash
+//     controller sit on APB3 at the SAME addresses on WBA and U5, and Renode
+//     ships STM32WBA_RCC / STM32WBA_PWR / STM32WBA_FlashController models.
+// Both files are copied verbatim into this directory; sha256 in README.md.
+//
+// #############################################################################
+// # WHAT IS CORRECT vs WHAT IS A SUBSTITUTE — read before trusting this file  #
+// #############################################################################
+//
+// ---- ADDRESS-CORRECT and model-appropriate (RM0456 + stm32u5.dtsi) ---------
+//   cpu cortex-m33; nvic @ 0xE000E000 (4 priority bits -> mask 0xF0)
+//   flash    @ 0x08000000  2 MB           (stm32u585Xi.dtsi)
+//   SRAM     @ 0x20000000  768 KB         (stm32u575.dtsi sram0; U5 RM splits
+//                                          this SRAM1 192K + SRAM2 64K + SRAM3
+//                                          512K, contiguous — modeled as one
+//                                          block, as Zephyr does)
+//   SRAM4    @ 0x28000000  16 KB          (stm32u575.dtsi sram1)
+//   flashController @ 0x40022000          (stm32u5.dtsi flash-controller@40022000;
+//                                          STM32WBA_FlashController — same gen,
+//                                          also what stm32l552.repl already used)
+//   usart1   @ 0x40013800  IRQ 61         RS-485 bus master   (Code B overlay)
+//   usart3   @ 0x40004800  IRQ 63         GNSS NMEA           (Code B overlay)
+//   lpuart1  @ 0x46002400  IRQ 66  <====  MCU<->Linux MsgPack-RPC bridge.
+//            THE CRITICAL MOVE: U5 puts LPUART1 on APB3 @ 0x46002400
+//            (stm32u5.dtsi lpuart1: serial@46002400). stm32l552.repl had it at
+//            0x40008000. Wrong address here = the whole Code B bridge is dead.
+//   spi2     @ 0x40003800  IRQ 60         SX1262                (Code B overlay)
+//   adc1     @ 0x42028000  IRQ 37         batt/solar sense      (Code B overlay)
+//   iwdg     @ 0x40003000                 supervisor watchdog   (Code B)
+//   rcc      @ 0x46020C00                 (stm32u5.dtsi rcc@46020c00)
+//   pwr      @ 0x46020800                 (stm32u5.dtsi power@46020800)
+//   exti     @ 0x46022000                 (stm32u5.dtsi interrupt-controller@46022000)
+//   rtc      @ 0x46007800  IRQ 2          (stm32u5.dtsi rtc@46007800)
+//   rng      @ 0x420C0800  IRQ 94         (stm32u5.dtsi rng@420c0800)
+//   crc      @ 0x40023000                 (stm32u5.dtsi crc@40023000)
+//   timers1..17, usart2, uart4/5, spi1/3, i2c1 — standard STM32 M33 addresses,
+//   identical on L5 and U5, inherited-equivalent from stm32l552.repl.
+//   Interrupt numbers 55/56/59/60/61/63/66/37/41-44/51-54/69-71 verified
+//   against stm32u5.dtsi (they happen to match stm32l552.repl unchanged).
+//
+// ---- SUBSTITUTE MODELS (right address, register layout only approximated) --
+//   rcc:  Miscellaneous.STM32WBA_RCC  — U5 and WBA share the APB3 RCC @
+//         0x46020C00; layout is NOT guaranteed byte-identical to RM0456 §RCC.
+//         Adequate for Zephyr's boot-time clock-ready polling. If clock init
+//         ever hangs, drop in a Python flipflop peripheral returning the RDY
+//         bits (see stm32l151.repl `rccCsr` / stm32g0.repl `rcc` for the pattern).
+//   pwr:  Miscellaneous.STM32WBA_PWR  — same story, PWR @ 0x46020800.
+//   exti: IRQControllers.STM32F4_EXTI — direct-interrupt stand-in, exactly as
+//         stm32l552.repl uses it ("registers not compatible ... here to support
+//         direct interrupts"), but relocated to the U5 address 0x46022000.
+//         Higher-fidelity option: IRQControllers.STM32WBA_EXTI (needs the
+//         per-port `exti#N` GPIO wiring from stm32wba52.repl).
+//   adc1: Analog.STM32L5_ADC — U5 ADC is a close relative; fine for the two
+//         DC sense channels Code B reads.
+//   lptim1/2: Timers.STM32L0_LpTimer stand-ins (addresses from stm32u5.dtsi),
+//         present only so STM32WBA_RCC can reference them.
+//   rtc:  STM32L_RTC stand-in at the correct U5 address.
+//
+// ---- STUB (no functional model in Renode 1.17) ----------------------------
+//   gpdma1 @ 0x40020000 — the UNO Q board dts sets `&gpdma1 { status = "okay" }`,
+//   so Zephyr's st,stm32u5-dma driver probes it at boot. Mapped as plain
+//   memory so that probe does not spew unhandled-access warnings. Code B's MCU
+//   app requests NO DMA channels (UART/SPI interrupt-driven, no CONFIG_*_DMA),
+//   so nothing ever needs GPDMA to actually move data.
+//
+// ---- GUESSED (not independently reverified against RM0456) ----------------
+//   syscfg Tag @ 0x46000400 — U5 APB3 memory map, from memory of RM0456, NOT
+//   reconfirmed (Zephyr folds SYSCFG into pinctrl so the dtsi does not list a
+//   base). Silenced only to keep pin-mux writes out of the log; nothing in
+//   Code B depends on SYSCFG behaviour.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+// ------------------------------------------------------------------ core ----
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m33"
+    nvic: nvic
+
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    priorityMask: 0xF0
+    systickFrequency: 160000000
+    IRQ -> cpu@0
+
+// ---------------------------------------------------------------- memory ----
+flash: Memory.MappedMemory @ sysbus 0x08000000
+    size: 0x200000
+
+sram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0xC0000
+
+sram4: Memory.MappedMemory @ sysbus 0x28000000
+    size: 0x4000
+
+// ------------------------------------------------- system control (APB3) ----
+rcc: Miscellaneous.STM32WBA_RCC @ sysbus 0x46020C00
+    nvic: nvic
+    lptim1: lptim1
+    lptim2: lptim2
+
+pwr: Miscellaneous.STM32WBA_PWR @ sysbus 0x46020800
+
+flashController: MTD.STM32WBA_FlashController @ sysbus 0x40022000
+    flash: flash
+
+exti: IRQControllers.STM32F4_EXTI @ sysbus 0x46022000
+    numberOfOutputLines: 43
+    firstDirectLine: 17
+    [0-15, 17] -> nvic@[11-26, 2]
+
+// ------------------------------------------------------------- lp timers ----
+lptim1: Timers.STM32L0_LpTimer @ sysbus 0x46004400
+    frequency: 0x1000000
+
+lptim2: Timers.STM32L0_LpTimer @ sysbus 0x40009400
+    frequency: 0x1000000
+
+// ----------------------------------------------------------------- UARTs ----
+usart1: UART.STM32F7_USART @ sysbus 0x40013800
+    frequency: 200000000
+    IRQ -> nvic@61
+
+usart2: UART.STM32F7_USART @ sysbus 0x40004400
+    frequency: 200000000
+    IRQ -> nvic@62
+
+usart3: UART.STM32F7_USART @ sysbus 0x40004800
+    frequency: 200000000
+    IRQ -> nvic@63
+
+uart4: UART.STM32F7_USART @ sysbus 0x40004C00
+    frequency: 200000000
+    IRQ -> nvic@64
+
+uart5: UART.STM32F7_USART @ sysbus 0x40005000
+    frequency: 200000000
+    IRQ -> nvic@65
+
+lpuart1: UART.STM32F7_USART @ sysbus 0x46002400
+    frequency: 200000000
+    lowPowerMode: true
+    IRQ -> nvic@66
+
+// ------------------------------------------------------------------- SPI ----
+spi1: SPI.STM32SPI @ sysbus 0x40013000
+    series: STM32Series.L5
+    IRQ -> nvic@59
+
+spi2: SPI.STM32SPI @ sysbus 0x40003800
+    series: STM32Series.L5
+    IRQ -> nvic@60
+
+spi3: SPI.STM32SPI @ sysbus 0x46002000
+    series: STM32Series.L5
+    IRQ -> nvic@99
+
+// ------------------------------------------------------------------- I2C ----
+i2c1: I2C.STM32F7_I2C @ sysbus 0x40005400
+    EventInterrupt -> nvic@55
+    ErrorInterrupt -> nvic@56
+
+// ------------------------------------------------------------------- ADC ----
+adc1: Analog.STM32L5_ADC @ sysbus 0x42028000
+    referenceVoltage: 3.3
+    externalEventFrequency: 1000
+    IRQ -> nvic@37
+
+// -------------------------------------------------------------- watchdog ----
+iwdg: Timers.STM32_IndependentWatchdog @ sysbus 0x40003000
+    frequency: 32000
+
+// ---------------------------------------------------------------- timers ----
+timer1: Timers.STM32_Timer @ sysbus 0x40012C00
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    BreakInterrupt -> nvic@41
+    UpdateInterrupt -> nvic@42
+    [TriggerInterrupt, CommutationInterrupt] -> nvic@[43, 43]
+    CaptureCompareInterrupt -> nvic@44
+
+timer2: Timers.STM32_Timer @ sysbus 0x40000000
+    frequency: 10000000
+    initialLimit: 0xFFFFFFFF
+    -> nvic@45
+
+timer3: Timers.STM32_Timer @ sysbus 0x40000400
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    -> nvic@46
+
+timer4: Timers.STM32_Timer @ sysbus 0x40000800
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    -> nvic@47
+
+timer5: Timers.STM32_Timer @ sysbus 0x40000C00
+    frequency: 10000000
+    initialLimit: 0xFFFFFFFF
+    -> nvic@48
+
+timer6: Timers.STM32_Timer @ sysbus 0x40001000
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    -> nvic@49
+
+timer7: Timers.STM32_Timer @ sysbus 0x40001400
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    -> nvic@50
+
+timer8: Timers.STM32_Timer @ sysbus 0x40013400
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    BreakInterrupt -> nvic@51
+    UpdateInterrupt -> nvic@52
+    [TriggerInterrupt, CommutationInterrupt] -> nvic@[53, 53]
+    CaptureCompareInterrupt -> nvic@54
+
+timer15: Timers.STM32_Timer @ sysbus 0x40014000
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    -> nvic@69
+
+timer16: Timers.STM32_Timer @ sysbus 0x40014400
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    -> nvic@70
+
+timer17: Timers.STM32_Timer @ sysbus 0x40014800
+    frequency: 10000000
+    initialLimit: 0xFFFF
+    -> nvic@71
+
+// ------------------------------------------------------------------- RTC ----
+rtc: STM32L_RTC @ sysbus <0x46007800, +0x400>
+    -> exti@17
+
+// ------------------------------------------------------------------- RNG ----
+rng: Miscellaneous.STM32_RNG @ sysbus 0x420C0800
+    series: STM32Series.L5
+    -> nvic@94
+
+// ------------------------------------------------------------------- CRC ----
+crc: CRC.STM32_CRC @ sysbus 0x40023000
+    series: STM32Series.F0
+    configurablePoly: true
+
+// --------------------------------------------------------- GPDMA1 (stub) ----
+gpdma1: Memory.MappedMemory @ sysbus 0x40020000
+    size: 0x2000
+
+// ------------------------------------------------------------------ GPIO ----
+gpioPortA: GPIOPort.STM32_GPIOPort @ sysbus <0x42020000, +0x400>
+    modeResetValue: 0xABFFFFFF
+    outputSpeedResetValue: 0x0C000000
+    pullUpPullDownResetValue: 0x64000000
+    numberOfAFs: 16
+    invertedAFPins: [[5, 3], [7, 1, 3]]
+    [0-15] -> exti@[0-15]
+
+gpioPortB: GPIOPort.STM32_GPIOPort @ sysbus <0x42020400, +0x400>
+    modeResetValue: 0xFFFFFEBF
+    pullUpPullDownResetValue: 0x00000100
+    numberOfAFs: 16
+    invertedAFPins: [[0, 1, 3], [1, 1, 3], [13, 1], [14, 1, 3], [15, 1, 3]]
+    [0-15] -> exti@[0-15]
+
+gpioPortC: GPIOPort.STM32_GPIOPort @ sysbus <0x42020800, +0x400>
+    modeResetValue: 0xFFFFFFFF
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortD: GPIOPort.STM32_GPIOPort @ sysbus <0x42020C00, +0x400>
+    modeResetValue: 0xFFFFFFFF
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortE: GPIOPort.STM32_GPIOPort @ sysbus <0x42021000, +0x400>
+    modeResetValue: 0xFFFFFFFF
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortF: GPIOPort.STM32_GPIOPort @ sysbus <0x42021400, +0x400>
+    modeResetValue: 0xFFFFFFFF
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortG: GPIOPort.STM32_GPIOPort @ sysbus <0x42021800, +0x400>
+    modeResetValue: 0xFFFFFFFF
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortH: GPIOPort.STM32_GPIOPort @ sysbus <0x42021C00, +0x400>
+    modeResetValue: 0x0000000F
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+// --------------------------------- timer <-> GPIO alternate functions ------
+// Standard STM32 M33 mapping (identical L5/U5), copied from stm32l552.repl.
+// Cosmetic here: Code B drives no timer outputs. Included for completeness so
+// AF queries resolve.
+timer1:
+    0 -> gpioPortA#07@01 | gpioPortA#08@01 | gpioPortB#13@01 | gpioPortE#08@01 | gpioPortE#09@01
+    1 -> gpioPortA#09@01 | gpioPortB#00@01 | gpioPortB#14@01 | gpioPortE#10@01 | gpioPortE#11@01
+    2 -> gpioPortA#10@01 | gpioPortB#01@01 | gpioPortB#15@01 | gpioPortE#12@01 | gpioPortE#13@01
+    3 -> gpioPortA#11@01 | gpioPortE#14@01
+
+timer2:
+    0 -> gpioPortA#00@01 | gpioPortA#05@01 | gpioPortA#15@01
+    1 -> gpioPortA#01@01 | gpioPortB#03@01
+    2 -> gpioPortA#02@01 | gpioPortB#10@01
+    3 -> gpioPortA#03@01 | gpioPortB#11@01
+
+timer3:
+    0 -> gpioPortA#06@02 | gpioPortB#04@02 | gpioPortC#06@02 | gpioPortE#03@02
+    1 -> gpioPortA#07@02 | gpioPortB#05@02 | gpioPortC#07@02 | gpioPortE#04@02
+    2 -> gpioPortB#00@02 | gpioPortC#08@02 | gpioPortE#05@02
+    3 -> gpioPortB#01@02 | gpioPortC#09@02 | gpioPortE#06@02
+
+timer4:
+    0 -> gpioPortB#06@02 | gpioPortB#12@02
+    1 -> gpioPortB#07@02 | gpioPortB#13@02
+    2 -> gpioPortB#08@02 | gpioPortB#14@02
+    3 -> gpioPortB#09@02 | gpioPortB#15@02
+
+timer5:
+    0 -> gpioPortB#00@02 | gpioPortF#06@02
+    1 -> gpioPortB#01@02 | gpioPortF#07@02
+    2 -> gpioPortB#02@02 | gpioPortF#08@02
+    3 -> gpioPortB#03@02 | gpioPortF#09@02
+
+gpioPortA:
+    0 -> timer2@00
+    1 -> timer2@01
+    2 -> timer2@02
+    3 -> timer2@03
+    5 -> timer2@00
+    6 -> timer3@00
+    7 -> timer1@00 | timer3@01
+    8 -> timer1@00
+    9 -> timer1@01
+    10 -> timer1@02
+    11 -> timer1@03
+    15 -> timer2@00
+
+gpioPortB:
+    0 -> timer1@01 | timer3@02 | timer5@00
+    1 -> timer1@02 | timer3@03 | timer5@01
+    2 -> timer5@02
+    3 -> timer2@01 | timer5@03
+    4 -> timer3@00
+    5 -> timer3@01
+    6 -> timer4@00
+    7 -> timer4@01
+    8 -> timer4@02
+    9 -> timer4@03
+    10 -> timer2@02
+    11 -> timer2@03
+    12 -> timer4@00
+    13 -> timer1@00 | timer4@01
+    14 -> timer1@01 | timer4@02
+    15 -> timer1@02 | timer4@03
+
+gpioPortC:
+    6 -> timer3@00
+    7 -> timer3@01
+    8 -> timer3@02
+    9 -> timer3@03
+
+gpioPortE:
+    3 -> timer3@00
+    4 -> timer3@01
+    5 -> timer3@02
+    6 -> timer3@03
+    8 -> timer1@00
+    9 -> timer1@00
+    10 -> timer1@01
+    11 -> timer1@01
+    12 -> timer1@02
+    13 -> timer1@02
+    14 -> timer1@03
+
+gpioPortF:
+    6 -> timer5@00
+    7 -> timer5@01
+    8 -> timer5@02
+    9 -> timer5@03
+
+// ---------------------------------------------------------------- sysbus ----
+sysbus:
+    init:
+        Tag <0x46000400, 0x460007FF> "SYSCFG"
+        Tag <0x40002C00, 0x40002FFF> "WWDG"
+        Tag <0xE0001004, 0xE0001007> "DWT_CYCCNT" 100
+        // Zephyr's U5 boot also touches 0x40030400 (TAMP/backup-domain block,
+        // identity inferred from the access pattern, NOT RM0456-verified) —
+        // left unmapped: the accesses are non-fatal warnings, and a guessed
+        // tag would be worse than an honest gap. Add one here if it ever matters.
+        // No confirmed public STM32U585 SVD; if you have one locally:
+        // ApplySVD @/path/to/STM32U585.svd

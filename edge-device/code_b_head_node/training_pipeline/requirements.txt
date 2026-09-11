@@ -1,0 +1,16 @@
+# OFFLINE training/export pipeline — dev machine only, never installed on the UNO Q.
+# Verified on Python 3.11, CPU only (2026-09-09).
+torch==2.11.0+cpu            # --index-url https://download.pytorch.org/whl/cpu   (granite-tsfm pins torch<2.12)
+granite-tsfm==0.3.9          # Granite TinyTimeMixer (real, pretrained weights fetched from the HF hub on first run)
+transformers==5.16.1
+torch-geometric==2.8.0.post1
+torch-geometric-temporal==0.56.2   # install with --no-deps, then:
+torch-sparse==0.6.18+pt211cpu      # -f https://data.pyg.org/whl/torch-2.11.0+cpu.html
+torch-scatter==2.1.2+pt211cpu      # -f https://data.pyg.org/whl/torch-2.11.0+cpu.html
+decorator==4.4.2                   # pinned by torch-geometric-temporal
+scikit-learn==1.7.2
+onnx==1.22.0
+onnxruntime==1.29.0
+numpy==2.4.6
+pandas==3.0.5
+pytest==9.1.1

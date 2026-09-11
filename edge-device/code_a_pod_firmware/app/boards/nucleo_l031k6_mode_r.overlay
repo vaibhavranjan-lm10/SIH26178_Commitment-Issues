@@ -1,0 +1,28 @@
+/*
+ * Mode R on the Nucleo-32 L031K6: EXTRA_DTC_OVERLAY_FILE for
+ * -DCONFIG_PRAHARI_LINK_MODE_R=y.  The 32-pin package cannot carry the
+ * whole dev population plus a radio, so the transducers on the SPI /
+ * control pins are disabled here.  Dev-board limitation only.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+&spi1 {
+	status = "okay";
+};
+
+&sx1262 {
+	status = "okay";
+};
+
+&rs485 {
+	status = "disabled";
+};
+
+&adc1 {
+	pinctrl-0 = <&adc_in0_pa0 &adc_in1_pa1 &adc_in4_pa4>;
+};
+
+&{/transducers/surface_soil} { status = "disabled"; };
+&{/transducers/pore_pressure} { status = "disabled"; };
+&{/transducers/mox_gas} { status = "disabled"; };
+&{/transducers/pyranometer} { status = "disabled"; };
+&{/transducers/wind_vane} { status = "disabled"; };

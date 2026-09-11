@@ -1,0 +1,106 @@
+/*
+ * PRAHARI head node MCU side on the Arduino UNO Q (STM32U585).
+ *
+ * Provisional carrier-board pinout on the UNO R3 header (blueprint §10.1
+ * "head node carrier" is not designed yet):
+ *   USART1  D0/D1  PB7/PB6   RS-485 (isolated transceiver), DE on D6 PB1
+ *   USART3  A1/A3  PA5/PA7   GNSS NMEA (only other UART on the header)
+ *   D2      PB3              GNSS PPS input (EXTI, cycle-counter timestamp)
+ *   SPI2    D11-13 + D10 CS  SX1262: RESET D9 PB8, BUSY D8 PB4, DIO1 D7 PB2
+ *   D3      PB0              3.3 V radio rail enable
+ *   D5      PA11             12 V mast bus enable (pods, RS-485)
+ *   D4      PA12             siren / relay output
+ *   A0      PA4  adc in9     battery voltage sense (through divider)
+ *   A2      PA6  adc in11    solar current sense
+ *   LPUART1 (internal, to QRB2210) MsgPack-RPC bridge to the Linux side
+ *           — binary, so it is NOT the console.  The real UNO Q's
+ *           Arduino_RouterBridge library is likewise documented as owning
+ *           its UART port exclusively ("falling back to Serial1"), not
+ *           sharing it with debug text; see code_b_head_node/README.md.
+ *           There is no free UART left on this header for a text console
+ *           (USART1 is RS-485, USART3 is GNSS) — CONFIG_PRINTK stays
+ *           enabled for local debugging with a debugger attached, it
+ *           simply has no UART backend to drive in this configuration.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	chosen {
+		prahari,rpc-uart = &lpuart1;
+		prahari,lora = &sx1262;
+		prahari,gnss = &gnss;
+	};
+
+	rs485: rs485 {
+		compatible = "prahari,rs485";
+		uart = <&usart1>;
+		de-gpios = <&gpiob 1 GPIO_ACTIVE_HIGH>;
+	};
+
+	hn_gpios {
+		compatible = "gpio-keys";
+		pps_in: pps {
+			gpios = <&gpiob 3 GPIO_ACTIVE_HIGH>;
+			label = "GNSS PPS";
+		};
+	};
+
+	hn_outputs {
+		compatible = "gpio-leds";
+		siren: siren {
+			gpios = <&gpioa 12 GPIO_ACTIVE_HIGH>;
+			label = "siren relay";
+		};
+		rail_12v: rail_12v {
+			gpios = <&gpioa 11 GPIO_ACTIVE_HIGH>;
+			label = "12V mast bus";
+		};
+		rail_radio: rail_radio {
+			gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>;
+			label = "3V3 radios";
+		};
+	};
+
+	zephyr,user {
+		io-channels = <&adc1 9>, <&adc1 11>;
+		io-channel-names = "batt", "solar";
+	};
+};
+
+/* RS-485 on the header UART; 19200 8N1 multi-drop. */
+&usart1 {
+	current-speed = <19200>;
+};
+
+/* GNSS receiver on USART3 (A3 = TX from MCU, A1 = RX). */
+&usart3 {
+	pinctrl-0 = <&usart3_tx_pa7 &usart3_rx_pa5>;
+	pinctrl-names = "default";
+	current-speed = <9600>;
+	status = "okay";
+
+	gnss: gnss-nmea-generic {
+		compatible = "gnss-nmea-generic";
+	};
+};
+
+/* SX1262 on the header SPI; CS as a GPIO instead of hardware NSS. */
+&spi2 {
+	pinctrl-0 = <&spi2_sck_pb13 &spi2_miso_pb14 &spi2_mosi_pb15>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpiob 9 GPIO_ACTIVE_LOW>;
+
+	sx1262: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		reset-gpios = <&gpiob 8 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&gpiob 4 GPIO_ACTIVE_HIGH>;
+		dio1-gpios = <&gpiob 2 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&iwdg {
+	status = "okay";
+};

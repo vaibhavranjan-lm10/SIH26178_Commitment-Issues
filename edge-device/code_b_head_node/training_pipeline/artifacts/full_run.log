@@ -1,0 +1,29 @@
+== corpus: SYNTHETIC PLACEHOLDER, 12 columns × 120 days, seed 0
+    cid     profile  n_channels  missing_frac  FL  UF  FI  PO  LS  HW  CY  GL  WQ
+0   C00     village          48      0.017376   0   0   0   1   0   1   1   0   0
+1   C01       urban          52      0.013041   2   1   0   1   0   1   1   0   0
+2   C02       urban          52      0.012453   1   1   0   1   1   1   1   0   0
+3   C03     village          48      0.010091   1   0   0   1   1   1   1   0   0
+4   C04    riverine          55      0.012292   2   1   0   1   1   1   1   0   0
+5   C05      forest          55      0.013611   0   1   0   1   1   1   1   0   0
+6   C06    riverine          55      0.013857   1   0   3   1   0   1   1   0   0
+7   C07  industrial          55      0.008106   1   0   0   1   0   1   1   0   0
+8   C08      forest          55      0.014394   0   0   0   1   0   1   1   0   0
+9   C09    riverine          55      0.012367   1   1   0   1   0   1   1   0   0
+10  C10  industrial          55      0.010227   1   1   0   1   0   1   1   0   0
+11  C11      forest          55      0.014047   0   2   4   1   0   1   1   0   0
+== split by column: train=['C00', 'C01', 'C02', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10'] val=['C03', 'C04', 'C11']
+== positive labels (hours) train: {"FL_t0": 225, "FL_t24": 386, "UF_t0": 31, "UF_t6": 56, "FI_t0": 113, "FI_t24": 182, "PO_t0": 396, "PO_t24": 603, "LS_t0": 20, "LS_t24": 66, "HW_t72": 1638, "CY_t48": 657, "GL_t0": 0, "WQ_t0": 0, "WQ_t24": 0}
+== positive labels (hours) val:   {"FL_t0": 91, "FL_t24": 160, "UF_t0": 15, "UF_t6": 30, "FI_t0": 146, "FI_t24": 238, "PO_t0": 132, "PO_t24": 201, "LS_t0": 16, "LS_t24": 62, "HW_t72": 546, "CY_t48": 219, "GL_t0": 0, "WQ_t0": 0, "WQ_t24": 0}
+INFO:p-5873:t-132241023197632:_client.py:_send_single_request:HTTP Request: HEAD https://huggingface.co/ibm-granite/granite-timeseries-ttm-r2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+INFO:p-5873:t-132241023197632:_client.py:_send_single_request:HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/ibm-granite/granite-timeseries-ttm-r2/d6a79570cac0f33d526601cd3a0fc7c80a8f9a2f/config.json?%2Fibm-granite%2Fgranite-timeseries-ttm-r2%2Fresolve%2Fmain%2Fconfig.json=&etag=%2209e937ef5082573c0785a180f23753110b78696c%22 "HTTP/1.1 200 OK"
+INFO:p-5873:t-132241023197632:_client.py:_send_single_request:HTTP Request: HEAD https://huggingface.co/ibm-granite/granite-timeseries-ttm-r2/resolve/main/model.safetensors "HTTP/1.1 302 Found"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:p-5873:t-132241023197632:_http.py:_warn_on_warning_headers:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/134 [00:00<?, ?it/s]Loading weights: 100%|██████████| 134/134 [00:00<00:00, 9239.77it/s]
+== model: {'encoder_backbone': 515584, 'encoder_proj': 251920, 'graph': 2675, 'heads': 48207, 'temperature': 9, 'total': 818395}  encoder=ibm-granite/granite-timeseries-ttm-r2
+== phase 1: standalone path (encoder + heads)
+/home/saurabh/prahari/code_b_head_node/training_pipeline/prahari_train/data.py:124: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:213.)
+  torch.from_numpy(col.labels[t]), c, t)
+[phase1] epoch 1/6  train_loss=0.5025  val_loss=0.7351  (497.5s)
+[phase1] epoch 2/6  train_loss=0.1561  val_loss=1.1710  (451.2s)

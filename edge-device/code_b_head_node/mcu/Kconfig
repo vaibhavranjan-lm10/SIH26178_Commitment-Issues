@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: Apache-2.0
+mainmenu "PRAHARI head node — MCU side (Code B)"
+
+config HN_NODE_ID
+	string "Node identifier (hashed for the mesh slot, §7.4)"
+	default "prahari-node-0"
+
+config HN_POD_ADDRS
+	string "Default RS-485 poll list, comma separated (overridden by \$PODS)"
+	default "1,2,3"
+
+config HN_SWEEP_CADENCE_S
+	int "Default RS-485 sweep cadence (s)"
+	range 1 3600
+	default 60
+	help
+	  Risk-adaptive: the Linux side changes it with $CADENCE (§6.4).
+
+config HN_BUS_REPLY_TIMEOUT_MS
+	int "Wait for a pod's reply before marking it missing (ms)"
+	default 100
+
+config HN_BUS_TURNAROUND_MS
+	int "Bus idle between a reply and the next poll (ms)"
+	default 5
+
+config HN_TDMA_SUPERFRAME_MS
+	int "TDMA superframe = inference cycle (ms)"
+	default 60000
+
+config HN_TDMA_BEACON_MS
+	int "Pod beacon airtime at superframe start (ms)"
+	default 500
+
+config HN_TDMA_POD_SLOT_MS
+	int "Mode R pod uplink slot (ms)"
+	default 2000
+
+config HN_TDMA_POD_SLOTS
+	int "Number of Mode R pod slots"
+	default 8
+
+config HN_TDMA_MESH_SLOT_MS
+	int "Mesh slot (ms): 20 B embedding at SF10 is ~0.5 s"
+	default 1000
+
+config HN_TDMA_MESH_SLOTS
+	int "Number of mesh slots (max head nodes per local mesh)"
+	default 16
+
+config HN_TDMA_GUARD_MS
+	int "Guard around slot edges (ms)"
+	default 50
+
+config HN_LORA_FREQ_HZ
+	int "LoRa centre frequency (Hz), §6.2 865-867 MHz"
+	default 866000000
+
+config HN_LORA_SF
+	int "LoRa spreading factor (§7.3 SF7-SF10)"
+	range 7 10
+	default 9
+
+config HN_LORA_TX_DBM
+	int "LoRa TX power (dBm)"
+	default 14
+
+config HN_PPS_TOL_US
+	int "PPS interval tolerance (us)"
+	default 2000
+
+config HN_PPS_LOCK_PULSES
+	int "Good pulses before the clock counts as locked"
+	default 3
+
+config HN_PPS_HOLDOVER_S
+	int "Seconds without PPS before holdover"
+	default 10
+
+config HN_WDT_TIMEOUT_MS
+	int "Hardware watchdog timeout (ms)"
+	default 8000
+
+config HN_BATT_SHED_MV
+	int "Shed the 12 V mast bus below this battery voltage (mV)"
+	default 11800
+	help
+	  LiFePO4 12.8 V nominal (§6.4).  Not specified in the blueprint;
+	  set from the battery's discharge curve.
+
+config HN_BATT_RESTORE_MV
+	int "Restore shed rails above this battery voltage (mV)"
+	default 12400
+
+config HN_ALERT_MAX_S
+	int "Cap on a single siren command (s)"
+	default 600
+
+# SX1262 through Zephyr's native backend (no loramac-node module here).
+configdefault LORA_SX126X
+	default n
+
+source "Kconfig.zephyr"

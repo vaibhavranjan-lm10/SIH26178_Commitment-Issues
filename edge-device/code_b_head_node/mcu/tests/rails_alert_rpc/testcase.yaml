@@ -1,0 +1,7 @@
+tests:
+  prahari.head_node.mcu.rails_alert_rpc:
+    platform_allow:
+      - native_sim/native/64
+    tags:
+      - prahari
+      - code_b

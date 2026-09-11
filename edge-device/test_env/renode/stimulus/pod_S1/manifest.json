@@ -1,0 +1,72 @@
+{
+  "kind": "PRAHARI L0 electrical stimulus (Renode) -- NOT application-level data",
+  "position": "S1",
+  "scenario": "blueprint section 11 village worked example",
+  "duration_h": 120.0,
+  "dt_s": 30.0,
+  "n_samples": 14401,
+  "rs485_addr": 1,
+  "lora_slot": 0,
+  "electrical_envelope": {
+    "adc_counts_max": 4095,
+    "adc_vref_uv": 3300000,
+    "gpio_levels": [
+      0,
+      1
+    ],
+    "i2c_byte_range": [
+      0,
+      255
+    ],
+    "uart_byte_range": [
+      0,
+      255
+    ]
+  },
+  "channels": {
+    "adc": [
+      {
+        "name": "soil_10cm",
+        "adc_channel": 0,
+        "param": 1,
+        "quantity": "vwc_s1",
+        "front_end_volts": [
+          1.0,
+          2.6
+        ],
+        "count_min": 1417,
+        "count_max": 2741
+      },
+      {
+        "name": "vrefint",
+        "adc_channel": 17,
+        "param": "O1 (rail self-report)",
+        "count_min": 1505,
+        "count_max": 1505,
+        "rail_mv": 3300.0
+      }
+    ],
+    "pulse": [],
+    "i2c": [],
+    "uart": []
+  },
+  "unrealised_channels": {
+    "P11_water_level": {
+      "physical": "stage_m",
+      "reason": "no P11 transducer in nucleo_l053r8.overlay"
+    },
+    "P38_turbidity": {
+      "physical": null,
+      "reason": "no P38 transducer in nucleo_l053r8.overlay"
+    }
+  },
+  "calibration": [
+    {
+      "param": 1,
+      "raw_lo": 2422,
+      "ref_lo": 100,
+      "raw_hi": 1178,
+      "ref_hi": 450
+    }
+  ]
+}

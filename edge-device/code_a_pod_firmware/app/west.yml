@@ -1,0 +1,32 @@
+# West manifest for PRAHARI Code A — pod firmware (L1).
+#
+# Topology: T2 ("application as manifest repository").  The workspace root
+# is code_a_pod_firmware/; this directory (app/) is the manifest repo and
+# the Zephyr application.  Zephyr itself and the HAL modules are checked
+# out as siblings of app/ by `west update` and are NOT part of the
+# deliverable source.
+#
+# Zephyr v4.4.2 — newest stable tag at time of setup (2026-09-09);
+# 4.4 is the first release of the new six-month cadence and the LTS
+# candidate.  Pinned to a tag, never a branch.  Requires Zephyr SDK 1.0.1
+# (zephyr/SDK_VERSION).
+#
+# Only the modules the STM32L0 pod target needs are imported.  Add to the
+# allowlist deliberately; do not remove it.
+manifest:
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.4.2
+      import:
+        name-allowlist:
+          - cmsis        # legacy CMSIS headers, still referenced by hal_stm32
+          - cmsis_6      # CMSIS 6 core headers used by Zephyr arch/arm
+          - hal_stm32    # STM32Cube LL/HAL + dts pinctrl for STM32L0
+
+  self:
+    path: app

@@ -1,0 +1,31 @@
+[INFO] Loaded monitor commands from: /home/saurabh/renode_portable/scripts/monitor.py
+Renode, version 1.17.0 (1.17.0+20260908git4b2e8a80a)
+
+(monitor) include @/home/saurabh/prahari/test_env/renode/one_pod_smoke.resc
+[20:04:30.5405] [INFO] Including script(s): /home/saurabh/prahari/test_env/renode/one_pod_smoke.resc
+[INFO] System bus created.
+[INFO] cpu: Guessing VectorTableOffset value to be 0x8000000.
+[INFO] cpu: Setting initial values: PC = 0x800297D, SP = 0x20001728.
+[INFO] pod_g: Machine started.
+[WARNING] i2c1: Unknown slave at address 68.
+[WARNING] i2c1: Trying to send byte 15 to an unknown slave with address 68.
+[WARNING] i2c1: Unknown slave at address 92.
+[WARNING] i2c1: Trying to send byte 15 to an unknown slave with address 92.
+[WARNING] i2c1: Unknown slave at address 24.
+[INFO] usart2: [host: 0.95s (+0.95s)|virt: 0.75s (+0.75s)] *** Booting Zephyr OS build dccb09599635 ***
+[INFO] usart2: [host: 0.95s (+2.04ms)|virt: 0.75s (+28.39µs)] PRAHARI pod firmware, position G (eeprom)
+[INFO] usart2: [host: 0.95s (+1.86ms)|virt:      0.75s (+0s)] 4 of 15 transducers populated at G:
+[INFO] usart2: [host: 0.96s (+1.63ms)|virt: 0.75s (+71.61µs)]   surface_soil     C/ADC    rail=soil-excitation init=0
+[INFO] usart2: [host: 0.96s (+0.82ms)|virt:      0.75s (+0s)]   pore_pressure    C/ADC    rail=analogue-aux init=0
+[INFO] usart2: [host:  0.96s (+1.4ms)|virt:   0.75s (+0.1ms)]   rain_gauge       D/pulse  rail=passive init=0
+[INFO] usart2: [host: 0.96s (+0.83ms)|virt:      0.75s (+0s)]   imu_tilt         A/I2C    rail=sensor-rail init=-19
+[INFO] usart2: [host: 0.96s (+0.89ms)|virt:   0.75s (+0.1ms)] calibration: 2 entries from eeprom
+[INFO] usart2: [host: 0.96s (+1.02ms)|virt:   0.75s (+0.1ms)] link: W/RS-485 addr=2 slot=0 (eeprom)
+[INFO] pod_g: Machine paused.
+Pausing emulation...
+== pod_g cpu ==
+0x800885c
+0x000000000002ACA4
+False
+Renode is quitting
+[20:04:40.6931] [INFO] pod_g: Disposed.

@@ -1,0 +1,69 @@
+// PRAHARI test env — L1 pod MCU platform: STM32L051
+// =================================================================
+// Blueprint §4.2 names "STM32L031 / L051" for the pod. code_a_pod_firmware
+// (see its README "Target" + "Image size" sections) establishes that the
+// L031's 32 KB flash cannot hold the §4.3 pipeline image, so the REAL pod
+// target is the L051 (64 KB flash / 8 KB RAM, Zephyr SoC support exists as
+// SOC_STM32L051XX, custom board pending). This description is that target.
+//
+//   - The board Code A currently *builds* on is nucleo_l053r8 as a 64 KB
+//     size stand-in -> load stm32l053.repl for today's real image.
+//   - The exact SoC of the smoke-build board nucleo_l031k6 -> stm32l031.repl.
+//
+// BASE: this file layers onto ./stm32l071.repl, which is a byte-for-byte
+// copy of Renode 1.17.0 platforms/cpus/stm32l071.repl (sha256 in
+// ../platforms/README.md). The STM32L0x1 family (L011/L031/L051/L071/L081)
+// shares ONE reference manual, RM0377, so every peripheral base address in
+// the L071 description is already an RM0377 address and is CORRECT for the
+// L051 unchanged. Only the memory-region sizes and the NVIC priority width
+// actually differ between L071 and L051.
+//
+// -------- HAND-ADAPTED (verified against RM0377 Rev 10 + ST DS + Zephyr
+//          dts/arm/st/l0/stm32l051*.dtsi, which Code A compiles against) --
+//   flash.size  0x30000 -> 0x10000   64 KB   (L051x8; L051x6 would be 0x8000)
+//   sram.size   0x5000  -> 0x2000    8 KB    (RM0377 Cat.3)
+//   eeprom.size 0x1800  -> 0x800     2 KB    data EEPROM @ 0x08080000 (Cat.3)
+//   nvic.priorityMask 0xF0 -> 0xC0   Cortex-M0+ on STM32L0 = 2 priority bits
+//                                    (Zephyr stm32l0.dtsi arm,num-irq-priority-bits = 2).
+//                                    The upstream L071 description carries 0xF0; corrected here.
+//
+// -------- MODELED SUPERSET (present in the base description, absent on a
+//          real L051 — left in place, HARMLESS: Code A's devicetree never
+//          addresses them; documented so a reviewer is not misled) --------
+//   gpioPortE @ 0x50001000     (L051 has GPIO A,B,C,D,H only)
+//   usart4    @ 0x40004C00     (Cat.5 only)
+//   usart5    @ 0x40005000     (Cat.5 only)
+//   i2c3      @ 0x40007800     (Cat.5 only)
+//   (No RNG in the base description, correct: L051 has no TRNG.)
+//
+// -------- ALREADY CORRECT for L051, inherited unchanged (RM0377 addresses):
+//   cpu cortex-m0+; nvic @ 0xE000E000; sram base 0x20000000; flash base
+//   0x08000000; eeprom base 0x08080000; flashController (flash+eeprom) @
+//   0x40022000; rcc STM32L0_RCC @ 0x40021000; pwr STM32L0_PWR @ 0x40007000;
+//   exti @ 0x40010400; syscfg @ 0x40010000; gpioPortA-D/H @ 0x50000000 step
+//   0x400; usart1 @ 0x40013800; usart2 @ 0x40004400; lpuart1 @ 0x40004800;
+//   i2c1 @ 0x40005400; i2c2 @ 0x40005800; spi1 @ 0x40013000; spi2 @
+//   0x40003800; adc1 @ 0x40012400; dma1 @ 0x40020000 (7 ch); timer2/3 @
+//   0x40000000/0400; timer6/7 @ 0x40001000/1400; timer21/22 @
+//   0x40010800/0x40011400; lptim1 @ 0x40007C00; iwdg @ 0x40003000; crc @
+//   0x40023000; rtc @ 0x40002800.
+//   Code A touches: usart1 OR usart2 (RS-485, Mode W), lpuart1 (particulate
+//   sensor UART), spi1 OR spi2 (SX1262, Mode R), i2c1, adc1 + vref, the
+//   flash/eeprom controller (position/link/calib blocks), rcc, pwr, gpio
+//   A/B/C, iwdg. All inherited at their RM0377 addresses.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+using "stm32l071.repl"
+
+nvic:
+    priorityMask: 0xC0
+
+flash:
+    size: 0x10000
+
+sram:
+    size: 0x2000
+
+eeprom:
+    size: 0x800
